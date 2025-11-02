@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { ArtistData } from "../../../utils/types";
+import { ArtistData } from "../utils/types";
 
 export const recommenderTool = createTool({
   id: "get-music",

@@ -4,6 +4,7 @@ import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
 import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } from './scorers/weather-scorer';
 import { musicRecommenderAgent } from './agents/music-recommender-agent';
+import "./routes/music-recommender-route"
 
 export const mastra = new Mastra({
   workflows: { },
