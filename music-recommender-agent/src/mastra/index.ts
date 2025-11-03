@@ -4,12 +4,16 @@ import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
 import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } from './scorers/weather-scorer';
 import { musicRecommenderAgent } from './agents/music-recommender-agent';
-import "./routes/music-recommender-route"
+
+import { a2aAgentRoute } from './routes/music-recommender-route';
 
 export const mastra = new Mastra({
   workflows: { },
   agents: { musicRecommenderAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
+  server:{
+    apiRoutes:[a2aAgentRoute]
+  },
   storage: new LibSQLStore({
     // stores observability, scores, ... into memory storage, if it needs to persist, change to file:../mastra.db
     url: ":memory:",
