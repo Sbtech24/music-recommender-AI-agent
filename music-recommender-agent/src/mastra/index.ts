@@ -5,14 +5,14 @@ import { LibSQLStore } from '@mastra/libsql';
 import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } from './scorers/weather-scorer';
 import { musicRecommenderAgent } from './agents/music-recommender-agent';
 
-import { a2aAgentRoute } from './routes/music-recommender-route';
+import { telexWebhook} from './routes/music-recommender-route';
 
 export const mastra = new Mastra({
  
   agents: { musicRecommenderAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
   server:{
-    apiRoutes:[a2aAgentRoute]
+    apiRoutes:[telexWebhook]
   },
   storage: new LibSQLStore({
     // stores observability, scores, ... into memory storage, if it needs to persist, change to file:../mastra.db
