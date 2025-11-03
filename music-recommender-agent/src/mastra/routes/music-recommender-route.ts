@@ -1,51 +1,138 @@
 import { registerApiRoute } from "@mastra/core/server";
+import { randomUUID } from "crypto";
 
-export const telexWebhook = registerApiRoute("/webhook/telex", {
+
+export const telexWebhook = registerApiRoute("/a2a/agent/:agentId", {
   method: "POST",
   handler: async (c) => {
     try {
-      const mastra = c.get("mastra");
-      const agent = mastra.getAgent("musicRecommenderAgent");
+      const mastraInstance = c.get("mastra");
+      const agentId = c.req.param("agentId");
 
+      // Parse JSON-RPC 2.0 body
       const body = await c.req.json();
+      const { jsonrpc, id: requestId, method, params } = body;
 
-      console.log("Incoming Telex webhook:", body);
-
-      // Extract the user's message and reply URL from Telex
-      const userMessage = body.event?.message || body.message || "";
-      const replyUrl = body.event?.reply_url || body.reply_url;
-
-      if (!userMessage) {
-        return c.json({ success: false, error: "No message received" }, 400);
+      // Validate JSON-RPC request
+      if (jsonrpc !== "2.0" || !requestId) {
+        return c.json({
+          jsonrpc: "2.0",
+          id: requestId || null,
+          error: {
+            code: -32600,
+            message: 'Invalid Request: jsonrpc must be "2.0" and id is required',
+          },
+        }, 400);
       }
 
-      // Run the Mastra agent to get a music recommendation
-      const response = await agent.generate([
-        { role: "user", content: userMessage },
-      ]);
+      const agent = mastraInstance.getAgent(agentId);
+      if (!agent) {
+        return c.json({
+          jsonrpc: "2.0",
+          id: requestId,
+          error: {
+            code: -32602,
+            message: `Agent '${agentId}' not found`,
+          },
+        }, 404);
+      }
 
-      const replyText = response.text || "I couldn’t find a recommendation.";
+      const { message, messages, contextId, taskId } = params || {};
+      let messagesList = [];
 
-      // Send the reply back to Telex via its provided reply URL
-      if (replyUrl) {
-        await fetch(replyUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event_name: "message.create",
-            message: replyText,
-          }),
+      if (message) messagesList = [message];
+      else if (Array.isArray(messages)) messagesList = messages;
+
+      const mastraMessages = messagesList.map((msg) => ({
+        role: msg.role,
+        content:
+          msg.parts
+            ?.map((part: any) =>
+              part.kind === "text"
+                ? part.text
+                : part.kind === "data"
+                ? JSON.stringify(part.data)
+                : ""
+            )
+            .join("\n") || "",
+      }));
+
+      // Run agent
+      const response = await agent.generate(mastraMessages);
+      const agentText = response.text || "No response generated.";
+
+      // Build base artifact list
+      const artifacts = [
+        {
+          artifactId: randomUUID(),
+          name: `${agentId}Response`,
+          parts: [{ kind: "text", text: agentText }],
+        },
+      ];
+
+      // Include tool results if any
+      if (response.toolResults?.length) {
+        artifacts.push({
+          artifactId: randomUUID(),
+          name: "ToolResults",
+          parts: response.toolResults.map((result) => ({
+            kind: "data",
+            text: JSON.stringify(result),
+          })),
         });
       }
 
+      // Build conversation history
+      const history = [
+        ...messagesList.map((msg) => ({
+          kind: "message",
+          role: msg.role,
+          parts: msg.parts,
+          messageId: msg.messageId || randomUUID(),
+          taskId: msg.taskId || taskId || randomUUID(),
+        })),
+        {
+          kind: "message",
+          role: "agent",
+          parts: [{ kind: "text", text: agentText }],
+          messageId: randomUUID(),
+          taskId: taskId || randomUUID(),
+        },
+      ];
+
+      // Return A2A-compliant response
       return c.json({
-        success: true,
-        reply: replyText,
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          id: taskId || randomUUID(),
+          contextId: contextId || randomUUID(),
+          status: {
+            state: "completed",
+            timestamp: new Date().toISOString(),
+            message: {
+              messageId: randomUUID(),
+              role: "agent",
+              parts: [{ kind: "text", text: agentText }],
+              kind: "message",
+            },
+          },
+          artifacts,
+          history,
+          kind: "task",
+        },
       });
     } catch (error: any) {
-      console.error("Webhook error:", error);
       return c.json(
-        { success: false, error: error.message },
+        {
+          jsonrpc: "2.0",
+          id: null,
+          error: {
+            code: -32603,
+            message: "Internal error",
+            data: { details: error.message },
+          },
+        },
         500
       );
     }
