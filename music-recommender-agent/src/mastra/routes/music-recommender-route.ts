@@ -9,6 +9,18 @@ export const telexWebhook = registerApiRoute("/a2a/agent/:agentId", {
       const agentId = c.req.param("agentId");
 
       const body = await c.req.json();
+
+      if (!body || Object.keys(body).length === 0) {
+        return await c.json(
+          {
+            status: "ok",
+            message: "Webhook received successfully, but no data was provided.",
+          },
+          200
+        );
+      }
+
+
       const { jsonrpc, id: requestId, method, params } = body;
 
       if (jsonrpc !== "2.0" || !requestId) {
