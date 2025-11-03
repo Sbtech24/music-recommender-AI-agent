@@ -2,7 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { recommenderTool } from "../tools/music-recommender-tool";
 
 export const musicRecommenderAgent = new Agent({
-  name: "Music Recommender Agent",
+  name: "musicRecommenderAgent",
   instructions: `
 You are a friendly and helpful assistant that recommends songs to users based on their mood.
 

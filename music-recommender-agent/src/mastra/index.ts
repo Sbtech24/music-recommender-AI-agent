@@ -8,7 +8,7 @@ import { musicRecommenderAgent } from './agents/music-recommender-agent';
 import { a2aAgentRoute } from './routes/music-recommender-route';
 
 export const mastra = new Mastra({
-  workflows: { },
+ 
   agents: { musicRecommenderAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
   server:{
