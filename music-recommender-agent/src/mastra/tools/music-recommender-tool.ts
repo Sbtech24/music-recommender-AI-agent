@@ -1,6 +1,5 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { ArtistData } from "../utils/types";
 
 export const recommenderTool = createTool({
   id: "get-music",
@@ -8,36 +7,44 @@ export const recommenderTool = createTool({
   inputSchema: z.object({
     mood: z.string().describe("User's mood, e.g. happy, sad, chill"),
   }),
-  outputSchema: z.array(
-    z.object({
-      id: z.number(),
-      title: z.string(),
-      link: z.string(),
-      artist: z.object({
-        name: z.string(),
-      }),
-    })
-  ),
+  outputSchema: z.object({
+    text: z.string(),
+    recommendations: z.array(
+      z.object({
+        id: z.number(),
+        title: z.string(),
+        link: z.string(),
+        artist: z.string(),
+      })
+    ),
+  }),
   execute: async ({ context }) => {
     const BASE_URL = `https://api.deezer.com/search?q=${context.mood}`;
-
     try {
       const response = await fetch(BASE_URL);
-      const data: ArtistData = await response.json();
+      const data = await response.json();
 
-      if (!data.data || data.data.length === 0)
-        throw new Error("No songs found for this mood");
-
-      const songs = data.data.slice(0, data.data.length-1).map((song) => ({
+      const recommendations = data.data.slice(0, 5).map((song: any) => ({
         id: song.id,
         title: song.title,
         link: song.link,
-        artist: { name: song.artist.name },
+        artist: song.artist.name,
       }));
 
-      return songs;
+    interface Song {
+      id: number;
+      title: string;
+      link: string;
+      artist: string;
+    }
+
+    const text: string = recommendations
+      .map((song: Song, i: number) => `${i + 1}. ${song.title} — ${song.artist}\n${song.link}`)
+      .join("\n\n");
+
+      return { text, recommendations };
     } catch (e: any) {
-      throw new Error(e.message || "Something went wrong");
+      throw new Error(e);
     }
   },
 });
