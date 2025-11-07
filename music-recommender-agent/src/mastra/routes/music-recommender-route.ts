@@ -5,6 +5,13 @@ function generateId() {
   return "id-" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
 
+// define a loose type for the agent response to satisfy TS
+type AgentResponse = {
+  text?: string | Promise<string> | null;
+  stream?: AsyncIterable<string> | null;
+  toolResults?: any[];
+};
+
 export const telexWebhook = registerApiRoute("/a2a/agent/:agentId", {
   method: "POST",
   handler: async (c) => {
@@ -24,7 +31,7 @@ export const telexWebhook = registerApiRoute("/a2a/agent/:agentId", {
         );
       }
 
-      const { jsonrpc, id: requestId, method, params } = body;
+      const { jsonrpc, id: requestId, params } = body;
 
       if (jsonrpc !== "2.0" || !requestId) {
         return await c.json(
@@ -75,8 +82,35 @@ export const telexWebhook = registerApiRoute("/a2a/agent/:agentId", {
             .join("\n") || "",
       }));
 
-      const response = await agent.generate(mastraMessages);
-      const agentText = response.text || "No response generated.";
+      // --- FIXED & TYPE-SAFE RESPONSE HANDLING ---
+      let response: AgentResponse = {};
+      try {
+        const raw = await agent.generate(mastraMessages);
+        response = raw as AgentResponse;
+
+        // safely check if text is a Promise
+        if (response.text && typeof (response.text as any).then === "function") {
+          response.text = await (response.text as Promise<string>).catch(() => null);
+        }
+
+        // safely handle stream
+        if (response.stream && Symbol.asyncIterator in Object(response.stream)) {
+          const chunks: string[] = [];
+          for await (const chunk of response.stream) {
+            chunks.push(chunk);
+          }
+          response.text = chunks.join("");
+        }
+      } catch (err) {
+        console.error("Agent generation failed:", err);
+        response = { text: null };
+      }
+
+      const agentText =
+        typeof response.text === "string" && response.text.trim() !== ""
+          ? response.text
+          : "No response generated.";
+      // --- END FIX ---
 
       const artifacts = [
         {
